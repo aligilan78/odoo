@@ -1355,7 +1355,10 @@ export class OdooEditor extends EventTarget {
                     toremove.remove();
                 }
             } else if (record.type === 'add') {
-                let node = this.idFind(record.oid) || this.unserializeNode(record.node);
+                let node = this.idFind(record.oid) || (record.node && this.unserializeNode(record.node));
+                if (!node) {
+                    continue;
+                }
                 if (this._collabClientId) {
                     const fakeNode = document.createElement('fake-el');
                     fakeNode.appendChild(node);
@@ -1508,6 +1511,9 @@ export class OdooEditor extends EventTarget {
                 case 'remove': {
                     let nodeToRemove = this.idFind(mutation.id);
                     if (!nodeToRemove) {
+                        if (!mutation.node) {
+                            continue;
+                        }
                         nodeToRemove = this.unserializeNode(mutation.node);
                         const fakeNode = document.createElement('fake-el');
                         fakeNode.appendChild(nodeToRemove);
@@ -2798,9 +2804,11 @@ export class OdooEditor extends EventTarget {
         const table = closestElement(item, 'table');
         const [sizeProp, positionProp, clientPositionProp] = direction === 'col' ? ['width', 'x', 'clientX'] : ['height', 'y', 'clientY'];
 
-        // Preserve current sizes.
-        const tableRect = table.getBoundingClientRect();
-        table.style[sizeProp] = tableRect[sizeProp] + 'px';
+        // Preserve current width.
+        if (sizeProp === 'width') {
+            const tableRect = table.getBoundingClientRect();
+            table.style[sizeProp] = tableRect[sizeProp] + 'px';
+        }
         const unsizedItemsSelector = `${direction === 'col' ? 'td' : 'tr'}:not([style*=${sizeProp}])`;
         for (const unsizedItem of table.querySelectorAll(unsizedItemsSelector)) {
             unsizedItem.style[sizeProp] = unsizedItem.getBoundingClientRect()[sizeProp] + 'px';
@@ -2848,7 +2856,9 @@ export class OdooEditor extends EventTarget {
                     }
                     table.style[marginProp] = newMargin + 'px';
                     item.style[sizeProp] = newSize + 'px';
-                    table.style[sizeProp] = tableRect[sizeProp] + sizeDelta + 'px';
+                    if (sizeProp === 'width') {
+                        table.style[sizeProp] = tableRect[sizeProp] + sizeDelta + 'px';
+                    }
                 }
                 break;
             }
@@ -2877,7 +2887,7 @@ export class OdooEditor extends EventTarget {
                     item.style[sizeProp] = newSize + 'px';
                     if (direction === 'col') {
                         neighbor.style[sizeProp] = (newNeighborSize > MIN_SIZE ? newNeighborSize : currentNeighborSize) + 'px';
-                    } else {
+                    } else if (sizeProp === 'width') {
                         table.style[sizeProp] = tableRect[sizeProp] + sizeDelta + 'px';
                     }
                 }
@@ -2898,7 +2908,9 @@ export class OdooEditor extends EventTarget {
                         childTable && childTable.getBoundingClientRect().right > itemRect.right + sizeDelta - 5)) {
                         break
                     }
-                    table.style[sizeProp] = tableRect[sizeProp] + sizeDelta + 'px';
+                    if (sizeProp === 'width') {
+                        table.style[sizeProp] = tableRect[sizeProp] + sizeDelta + 'px';
+                    }
                     item.style[sizeProp] = newSize + 'px';
                 }
                 break;
@@ -3561,20 +3573,14 @@ export class OdooEditor extends EventTarget {
         );
     }
     _safeSetAttribute(node, attributeName, attributeValue) {
-        const parent = node.parentNode;
-        const next = node.nextSibling;
-        this.observerFlush();
-        node.remove();
-        this.observer.takeRecords();
-        node.setAttribute(attributeName, attributeValue);
-        this.observerFlush();
-        DOMPurify.sanitize(node, { IN_PLACE: true });
-        if (next) {
-            next.before(node);
-        } else if (parent) {
-            parent.append(node);
+        const clone = document.createElement(node.tagName);
+        clone.setAttribute(attributeName, attributeValue);
+        DOMPurify.sanitize(clone, { IN_PLACE: true });
+        if (clone.hasAttribute(attributeName)) {
+            node.setAttribute(attributeName, clone.getAttribute(attributeName));
+        } else {
+            node.removeAttribute(attributeName);
         }
-        this.observer.takeRecords();
     }
     _insertLinkZws(side, link) {
         this.observerUnactive('_insertLinkZws');
@@ -3705,7 +3711,7 @@ export class OdooEditor extends EventTarget {
                         // Since the unit test Event is not trusted by the browser, we don't
                         // need to undo the char during the unit tests.
                         // @see https://developer.mozilla.org/en-US/docs/Web/API/Event/isTrusted
-                        this._applyRawCommand('oDeleteBackward');
+                        this._protect(() => this._applyRawCommand('oDeleteBackward'));
                     }
                     if (latestSelectionInsideEmptyTag) {
                         // Restore the selection inside the empty Element.
@@ -4175,6 +4181,9 @@ export class OdooEditor extends EventTarget {
         let appliedCustomSelection = false;
         if (selection.rangeCount && selection.getRangeAt(0)) {
             appliedCustomSelection = this._handleSelectionInTable();
+            if (!appliedCustomSelection) {
+                this.deselectTable();
+            }
 
             // Handle selection/navigation at the edges of links.
             const link = getInSelection(this.document, EDITABLE_LINK_SELECTOR);
