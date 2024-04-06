@@ -1,0 +1,20 @@
+name: CD-Liara
+on:
+  push:
+    branches:
+      - 17.0
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: "18"
+      - name: update-liara
+        env:
+          LIARA_TOKEN: ${{ secrets.LIARA_API_TOKEN }}
+        run: |
+          npm i -g @liara/cli@5
+          liara deploy --app="nikanpanel" --api-token="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySUQiOiI2NjExMjllMzViMDA4Mzg3OGU4NGRlZDEiLCJpYXQiOjE3MTI0MDI1OTl9.quQ4h1Zp8B61BX76KEUQHVmROVshk9pNhsklCa9UddE" --no-app-logs --port:8069
