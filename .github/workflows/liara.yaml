@@ -2,7 +2,7 @@ name: CD-Liara
 on:
   push:
     branches:
-      - 17.0
+      - master
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -17,4 +17,4 @@ jobs:
           LIARA_TOKEN: ${{ secrets.LIARA_API_TOKEN }}
         run: |
           npm i -g @liara/cli@5
-          liara deploy --app="nikanpanel" --api-token="$LIARA_TOKEN" --no-app-logs --port:8069
+          liara deploy --app="nikanpanel" --api-token="$LIARA_TOKEN" --no-app-logs
