@@ -278,7 +278,7 @@ class AccountChartTemplate(models.AbstractModel):
         unique_tax_name_keys = set(current_taxes.mapped(unique_tax_name_key))
         xmlid2tax = {
             xml_id.split('.')[1].split('_', maxsplit=1)[1]: self.env['account.tax'].browse(record)
-            for record, xml_id in current_taxes.get_external_id().items() if xml_id
+            for record, xml_id in current_taxes.get_external_id().items() if xml_id.startswith('account.')
         }
         def tax_template_changed(tax, template):
             return (
@@ -316,8 +316,14 @@ class AccountChartTemplate(models.AbstractModel):
                         if xmlid in xmlid2tax:
                             obsolete_xmlid.add(xmlid)
                             oldtax = xmlid2tax[xmlid]
-                            if unique_tax_name_key(oldtax) in unique_tax_name_keys:
-                                oldtax.name = f"[old] {oldtax.name}"
+                        else:
+                            oldtax = current_taxes.filtered(
+                                lambda t: t.name == values.get('name')\
+                                      and t.type_tax_use == values.get('type_tax_use')\
+                                      and t.tax_scope == values.get('tax_scope', False)
+                            )
+                        if unique_tax_name_key(oldtax) in unique_tax_name_keys:
+                            oldtax.name = f"[old] {oldtax.name}"
                     else:
                         repartition_lines = values.get('repartition_line_ids')
                         values.clear()
